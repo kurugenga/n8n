@@ -1,0 +1,258 @@
+{
+  "name": "Telegram Hava Durumu Botu (Windy)",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "3a812152-46bb-4c6c-80e8-2de4033293d8",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [
+        -448,
+        80
+      ],
+      "webhookDescription": "On message",
+      "webhookId": "d10e11a3-00f2-4c11-81e5-7aca7810caf8",
+      "credentials": {
+        "telegramApi": {
+          "id": "j48uDLHoBWbipoSL",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{($json[\"message\"][\"text\"] || \"\").trim().split(\" \").length}}",
+              "operation": "largerEqual",
+              "value2": 1
+            }
+          ]
+        }
+      },
+      "name": "Şehir Girilmiş mi?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        80
+      ],
+      "id": "6eef42fc-dba8-4e73-8733-305042069be7"
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(($node[\"Telegram Trigger\"].json.message.text || '').split(' ').slice(1).join(' ')) }}",
+        "options": {}
+      },
+      "name": "Geocode (Nominatim)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        32,
+        -80
+      ],
+      "id": "b9ffd5de-872d-4009-9d07-790677b196fb"
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            {
+              "name": "name",
+              "value": "={{$json[0].display_name}}"
+            }
+          ],
+          "number": [
+            {
+              "name": "lat",
+              "value": "={{Number($json[0].lat)}}"
+            },
+            {
+              "name": "lon",
+              "value": "={{Number($json[0].lon)}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Koordinat Al",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        256,
+        -80
+      ],
+      "id": "0673f57c-8ca7-4541-bfdd-4c4b810fb08e"
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "https://api.windy.com/api/point-forecast/v2",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={{\n  {\n    lat: $json.lat,\n    lon: $json.lon,\n    model: \"iconEu\",\n    parameters: [\"temp\", \"wind\", \"windGust\", \"precip\", \"mclouds\"],\n    levels: [\"surface\"],\n    key: \"sFE9c9PxiejDt1JMKAhU0aMqyInPLRQw\"\n  }\n}}",
+        "headerParametersJson": "={ \"Content-Type\": \"application/json\" }"
+      },
+      "name": "Windy Forecast",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        448,
+        -80
+      ],
+      "id": "26a6a79d-1343-4c6e-a75b-4183bc93b425"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Tek öğe için çalışacak şekilde yazıldı (Run Once for All Items = OFF)\nconst data = JSON;\n\n// Windy point-forecast v2 tipik alanları\nconst temps  = (data.temp && data.temp.surface)  || [];\nconst wind   = (data.wind && data.wind.surface)  || [];\nconst windGust   = (data.windGust && data.windGust.surface)  || [];\nconst precip = (data.precip && data.precip.surface) || [];\nconst mclouds = (data.mclouds && data.clouds.surface) || [];\n\n// En yakın saat: ilk indeks\nconst i = 0;\n\nconst c  = temps[i]  != null ? Math.round(temps[i]) : null;\nconst w  = wind[i]   != null ? Math.round(wind[i])  : null;\nconst g  = windGust[i]   != null ? Math.round(windGust[i])  : null;\nconst p  = precip[i] != null ? precip[i]            : null;\nconst cl = mclouds[i] != null ? Math.round(mclouds[i]): null;\n\nconst parts = [];\nif (c  != null) parts.push(`${c}°C`);\nif (w  != null) parts.push(`rüzgar ${w} km/s`);\nif (g  != null) parts.push(`gust ${g} km/s`);\nif (p  != null) parts.push(`yağış ${p} mm`);\nif (cl != null) parts.push(`bulutluluk %${cl}`);\n\nconst text = parts.length ? parts.join(\", \") : \"Veri bulunamadı.\";\n\n// n8n v2: mutlaka { json: {...} } sarmalı ile dön\nreturn [{ json: { text } }];\n"
+      },
+      "name": "Formatla",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        -80
+      ],
+      "id": "4d5d4d02-e4cf-40e4-9987-0ec8c81f8adb"
+    },
+    {
+      "parameters": {
+        "chatId": "={{$node[\"Telegram Trigger\"].json[\"message\"][\"chat\"][\"id\"]}}",
+        "text": "={{$node[\"Koordinat Al\"].json.name + '\\n' + $json.text}}",
+        "additionalFields": {}
+      },
+      "name": "Sonuç Mesajı",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        848,
+        -80
+      ],
+      "id": "72b37fd7-0bb5-497f-9fee-77dd30dfd44c",
+      "webhookId": "aed89596-3b54-4c9e-8938-7de33410f12b",
+      "credentials": {
+        "telegramApi": {
+          "id": "j48uDLHoBWbipoSL",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{$node[\"Telegram Trigger\"].json[\"message\"][\"chat\"][\"id\"]}}",
+        "text": "Lütfen şehir girin. Örnek: /hava Ankara",
+        "additionalFields": {}
+      },
+      "name": "Uyarı Mesajı",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        48,
+        128
+      ],
+      "id": "be794977-2189-4af6-b333-6df717384ff0",
+      "webhookId": "2067c3e6-5e51-4893-82ef-8f06618305a4",
+      "credentials": {
+        "telegramApi": {
+          "id": "j48uDLHoBWbipoSL",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Şehir Girilmiş mi?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Şehir Girilmiş mi?": {
+      "main": [
+        [
+          {
+            "node": "Geocode (Nominatim)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Uyarı Mesajı",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Geocode (Nominatim)": {
+      "main": [
+        [
+          {
+            "node": "Koordinat Al",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Koordinat Al": {
+      "main": [
+        [
+          {
+            "node": "Windy Forecast",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Windy Forecast": {
+      "main": [
+        [
+          {
+            "node": "Formatla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatla": {
+      "main": [
+        [
+          {
+            "node": "Sonuç Mesajı",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "14d5079e-e41f-4452-b0db-04aa92d0bffd",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "bb031654a8b7c9ab7b2973133fcaeaea0b6e8b1c88e16276631b0b4d9e815494"
+  },
+  "id": "3nbmlEHZhZffJMqz",
+  "tags": []
+}

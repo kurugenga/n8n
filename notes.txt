@@ -1,0 +1,3 @@
+docker run -d --name ngrok --restart unless-stopped `
+  -e NGROK_AUTHTOKEN=2xKouK4U1PUcobBVhkQEAVkDlYk_3Qxt2h2DRMA34cQSoZMHh `
+  ngrok/ngrok:latest http --domain=stethoscopic-leonora-araeostyle.ngrok-free.dev http://host.docker.internal:5678
