@@ -5,18 +5,18 @@ import {
 } from '@/__tests__/mocks';
 import { createComponentRenderer } from '@/__tests__/render';
 import VirtualSchema from './VirtualSchema.vue';
-import * as nodeHelpers from '@/composables/useNodeHelpers';
-import { useTelemetry } from '@/composables/useTelemetry';
+import * as nodeHelpers from '@/app/composables/useNodeHelpers';
+import { useTelemetry } from '@/app/composables/useTelemetry';
 import {
 	IF_NODE_TYPE,
 	MANUAL_TRIGGER_NODE_TYPE,
 	SET_NODE_TYPE,
 	SPLIT_IN_BATCHES_NODE_TYPE,
-} from '@/constants';
+} from '@/app/constants';
 import type { IWorkflowDb } from '@/Interface';
 import { useNDVStore } from '@/features/ndv/shared/ndv.store';
-import { useNodeTypesStore } from '@/stores/nodeTypes.store';
-import { useWorkflowsStore } from '@/stores/workflows.store';
+import { useNodeTypesStore } from '@/app/stores/nodeTypes.store';
+import { useWorkflowsStore } from '@/app/stores/workflows.store';
 import { createTestingPinia } from '@pinia/testing';
 import { fireEvent } from '@testing-library/dom';
 import { userEvent } from '@testing-library/user-event';
@@ -30,9 +30,9 @@ import {
 import { setActivePinia } from 'pinia';
 import { mock } from 'vitest-mock-extended';
 import { defaultSettings } from '@/__tests__/defaults';
-import { usePostHog } from '@/stores/posthog.store';
-import { useSchemaPreviewStore } from '@/stores/schemaPreview.store';
-import { useSettingsStore } from '@/stores/settings.store';
+import { usePostHog } from '@/app/stores/posthog.store';
+import { useSchemaPreviewStore } from '@/features/ndv/runData/schemaPreview.store';
+import { useSettingsStore } from '@/app/stores/settings.store';
 
 const mockNode1 = createTestNode({
 	name: 'Manual Trigger',
@@ -1057,9 +1057,8 @@ describe('VirtualSchema.vue', () => {
 
 	describe('execute event emission', () => {
 		it('should emit execute event when schema preview execute link is clicked', async () => {
-			// Set up schema preview mode
 			useWorkflowsStore().pinData({
-				node: mockNode1,
+				node: mockNode2,
 				data: [],
 			});
 
@@ -1079,22 +1078,68 @@ describe('VirtualSchema.vue', () => {
 
 			const { emitted, getByText } = renderComponent({
 				props: {
+					nodes: [{ name: mockNode2.name, indicies: [], depth: 1 }],
+				},
+			});
+
+			const executeLink = await waitFor(() => getByText('Execute the node'));
+			expect(executeLink).toBeInTheDocument();
+
+			fireEvent.click(executeLink);
+
+			await waitFor(() => {
+				expect(emitted()).toHaveProperty('execute');
+				expect(emitted().execute[0]).toEqual([mockNode2.name]);
+			});
+		});
+	});
+
+	describe('trigger node schema preview', () => {
+		it('should not call getSchemaPreview for trigger nodes', async () => {
+			const schemaPreviewStore = useSchemaPreviewStore();
+			const getSchemaPreviewSpy = vi.spyOn(schemaPreviewStore, 'getSchemaPreview');
+
+			const { getAllByText } = renderComponent({
+				props: {
 					nodes: [{ name: mockNode1.name, indicies: [], depth: 1 }],
 				},
 			});
 
-			// Wait for the preview execute link to appear
-			const executeLink = await waitFor(() => getByText('Execute the node'));
-			expect(executeLink).toBeInTheDocument();
-
-			// Click the execute link
-			fireEvent.click(executeLink);
-
-			// Verify the execute event was emitted with the node name
 			await waitFor(() => {
-				expect(emitted()).toHaveProperty('execute');
-				expect(emitted().execute[0]).toEqual([mockNode1.name]);
+				expect(getAllByText('Execute previous nodes').length).toBe(1);
 			});
+
+			expect(getSchemaPreviewSpy).not.toHaveBeenCalled();
+		});
+
+		it('should call getSchemaPreview for non-trigger nodes without data', async () => {
+			const schemaPreviewStore = useSchemaPreviewStore();
+			const getSchemaPreviewSpy = vi
+				.spyOn(schemaPreviewStore, 'getSchemaPreview')
+				.mockResolvedValue(
+					createResultOk({
+						type: 'object',
+						properties: {
+							id: { type: 'string' },
+						},
+					}),
+				);
+
+			const { getAllByTestId } = renderComponent({
+				props: {
+					nodes: [{ name: mockNode2.name, indicies: [], depth: 1 }],
+				},
+			});
+
+			await waitFor(() => {
+				expect(getAllByTestId('run-data-schema-header')).toHaveLength(2);
+			});
+
+			expect(getSchemaPreviewSpy).toHaveBeenCalledWith(
+				expect.objectContaining({
+					nodeType: SET_NODE_TYPE,
+				}),
+			);
 		});
 	});
 

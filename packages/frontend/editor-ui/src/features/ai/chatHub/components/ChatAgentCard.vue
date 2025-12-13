@@ -1,17 +1,15 @@
 <script setup lang="ts">
-import { getAgentRoute, getTimestamp } from '@/features/ai/chatHub/chat.utils';
-import ChatAgentAvatar from '@/features/ai/chatHub/components/ChatAgentAvatar.vue';
-import type { ChatHubAgentDto, ChatHubConversationModel } from '@n8n/api-types';
-import type { IWorkflowDb } from '@/Interface';
-import { N8nIconButton, N8nText } from '@n8n/design-system';
-import TimeAgo from '@/components/TimeAgo.vue';
 import { computed } from 'vue';
+import { getAgentRoute } from '@/features/ai/chatHub/chat.utils';
+import ChatAgentAvatar from '@/features/ai/chatHub/components/ChatAgentAvatar.vue';
+import type { ChatModelDto } from '@n8n/api-types';
+import { N8nActionDropdown, N8nBadge, N8nIconButton, N8nText } from '@n8n/design-system';
+import type { ActionDropdownItem } from '@n8n/design-system/types';
+import { useI18n } from '@n8n/i18n';
 import { RouterLink } from 'vue-router';
 
-const { model, agents, workflowsById } = defineProps<{
-	model: ChatHubConversationModel;
-	agents: ChatHubAgentDto[];
-	workflowsById: Partial<Record<string, IWorkflowDb>>;
+const { agent } = defineProps<{
+	agent: ChatModelDto;
 }>();
 
 const emit = defineEmits<{
@@ -19,61 +17,76 @@ const emit = defineEmits<{
 	delete: [];
 }>();
 
-const description = computed(() => {
-	if (model.provider === 'custom-agent') {
-		const agent = agents.find((a) => a.id === model.agentId);
+const i18n = useI18n();
 
-		if (agent?.description) {
-			return agent.description;
-		}
-	}
+type MenuAction = 'edit' | 'delete';
 
-	return 'No description';
+const menuItems = computed<Array<ActionDropdownItem<MenuAction>>>(() => {
+	return [
+		{ id: 'edit' as const, label: i18n.baseText('chatHub.agent.card.menu.edit') },
+		...(agent.model.provider === 'custom-agent'
+			? [{ id: 'delete' as const, label: i18n.baseText('chatHub.agent.card.menu.delete') }]
+			: []),
+	];
 });
 
-const updatedAt = computed(() => getTimestamp(model, 'updatedAt', agents, workflowsById));
-const createdAt = computed(() => getTimestamp(model, 'createdAt', agents, workflowsById));
+function handleSelectMenu(action: MenuAction) {
+	switch (action) {
+		case 'delete':
+			emit('delete');
+			return;
+		case 'edit':
+			emit('edit');
+	}
+}
 </script>
 
 <template>
-	<RouterLink :to="getAgentRoute(model)" :class="$style.card">
-		<ChatAgentAvatar :model="model" size="lg" />
+	<RouterLink :to="getAgentRoute(agent.model)" :class="$style.card">
+		<ChatAgentAvatar :agent="agent" size="lg" />
 
 		<div :class="$style.content">
 			<N8nText tag="h3" size="medium" bold :class="$style.title">
-				{{ model.name }}
+				{{ agent.name }}
 			</N8nText>
 			<N8nText size="small" color="text-light" :class="$style.description">
-				{{ description }}
+				{{ agent.description || i18n.baseText('chatHub.agent.card.noDescription') }}
 			</N8nText>
-			<div :class="$style.metadata">
-				<N8nText size="small" color="text-light">
-					{{ model.provider === 'n8n' ? 'n8n workflow' : 'Custom agent' }}
-				</N8nText>
-				<N8nText v-if="updatedAt" size="small" color="text-light">
-					Last updated <TimeAgo :date="String(updatedAt)" />
-				</N8nText>
-				<N8nText v-if="createdAt" size="small" color="text-light">
-					Created <TimeAgo :date="String(createdAt)" />
-				</N8nText>
-			</div>
 		</div>
 
-		<div v-if="model.provider === 'custom-agent'" :class="$style.actions">
+		<N8nBadge theme="tertiary" show-border :class="$style.badge">
+			{{
+				agent.model.provider === 'n8n'
+					? i18n.baseText('chatHub.agent.card.badge.n8nWorkflow')
+					: i18n.baseText('chatHub.agent.card.badge.customAgent')
+			}}
+		</N8nBadge>
+
+		<div :class="$style.actions">
 			<N8nIconButton
 				icon="pen"
 				type="tertiary"
 				size="medium"
-				title="Edit"
+				:title="i18n.baseText('chatHub.agent.card.button.edit')"
 				@click.prevent="emit('edit')"
 			/>
-			<N8nIconButton
-				icon="trash-2"
-				type="tertiary"
-				size="medium"
-				title="More options"
-				@click.prevent="emit('delete')"
-			/>
+			<N8nActionDropdown
+				:items="menuItems"
+				placement="bottom-end"
+				@select="handleSelectMenu"
+				@click.stop.prevent
+			>
+				<template #activator>
+					<N8nIconButton
+						icon="ellipsis-vertical"
+						type="tertiary"
+						size="medium"
+						:title="i18n.baseText('chatHub.agent.card.button.moreOptions')"
+						text
+						:class="$style.actionDropdownTrigger"
+					/>
+				</template>
+			</N8nActionDropdown>
 		</div>
 	</RouterLink>
 </template>
@@ -82,17 +95,17 @@ const createdAt = computed(() => getTimestamp(model, 'createdAt', agents, workfl
 .card {
 	display: flex;
 	align-items: center;
-	gap: var(--spacing--md);
-	padding: var(--spacing--md);
+	gap: var(--spacing--sm);
+	padding: var(--spacing--sm);
 	background-color: var(--color--background--light-3);
 	border: var(--border);
 	border-radius: var(--radius--lg);
 	text-decoration: none;
 	color: inherit;
-	transition: border-color 0.2s ease;
+	transition: box-shadow 0.3s ease;
 
 	&:hover {
-		border-color: var(--color--primary);
+		box-shadow: 0 2px 8px rgba(#441c17, 0.1);
 	}
 }
 
@@ -108,6 +121,10 @@ const createdAt = computed(() => getTimestamp(model, 'createdAt', agents, workfl
 	min-width: 0;
 }
 
+.badge {
+	padding: var(--spacing--4xs) var(--spacing--2xs);
+}
+
 .title {
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -120,28 +137,14 @@ const createdAt = computed(() => getTimestamp(model, 'createdAt', agents, workfl
 	white-space: nowrap;
 }
 
-.metadata {
-	display: flex;
-	align-items: center;
-
-	& > * {
-		display: flex;
-		align-items: center;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	& > *:not(:last-child):after {
-		content: '•';
-		display: block;
-		padding-inline: var(--spacing--3xs);
-	}
-}
-
 .actions {
 	display: flex;
 	gap: var(--spacing--2xs);
 	flex-shrink: 0;
+}
+
+.actionDropdownTrigger {
+	box-shadow: none !important;
+	outline: none !important;
 }
 </style>

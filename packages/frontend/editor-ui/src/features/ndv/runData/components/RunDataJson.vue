@@ -1,21 +1,21 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, ref } from 'vue';
 import VueJsonPretty from 'vue-json-pretty';
-import type { INodeExecutionData } from 'n8n-workflow';
-import Draggable from '@/components/Draggable.vue';
-import { executionDataToJson } from '@/utils/nodeTypesUtils';
-import { isString } from '@/utils/typeGuards';
-import { shorten } from '@/utils/typesUtils';
+import type { INodeExecutionData, IRunExecutionData } from 'n8n-workflow';
+import Draggable from '@/app/components/Draggable.vue';
+import { executionDataToJson } from '@/app/utils/nodeTypesUtils';
+import { isString } from '@/app/utils/typeGuards';
+import { shorten } from '@/app/utils/typesUtils';
 import type { INodeUi } from '@/Interface';
 import { useNDVStore } from '@/features/ndv/shared/ndv.store';
 import MappingPill from './MappingPill.vue';
-import { getMappedExpression } from '@/utils/mappingUtils';
-import { nonExistingJsonPath } from '@/constants';
-import { useExternalHooks } from '@/composables/useExternalHooks';
+import { getMappedExpression } from '@/app/utils/mappingUtils';
+import { nonExistingJsonPath } from '@/app/constants';
+import { useExternalHooks } from '@/app/composables/useExternalHooks';
 import TextWithHighlights from './TextWithHighlights.vue';
-import { useTelemetry } from '@/composables/useTelemetry';
+import { useTelemetry } from '@/app/composables/useTelemetry';
 import { useElementSize } from '@vueuse/core';
-import { useTelemetryContext } from '@/composables/useTelemetryContext';
+import { useTelemetryContext } from '@/app/composables/useTelemetryContext';
 
 const LazyRunDataJsonActions = defineAsyncComponent(
 	async () => await import('@/features/ndv/runData/components/RunDataJsonActions.vue'),
@@ -35,6 +35,7 @@ const props = withDefaults(
 		totalRuns: number | undefined;
 		search: string | undefined;
 		compact?: boolean;
+		execution?: IRunExecutionData;
 	}>(),
 	{
 		editMode: () => ({}),
@@ -147,6 +148,7 @@ const getListItemName = (path: string) => {
 				:json-data="jsonData"
 				:output-index="outputIndex"
 				:run-index="runIndex"
+				:execution="execution"
 			/>
 		</Suspense>
 		<Draggable

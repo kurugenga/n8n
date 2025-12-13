@@ -1,20 +1,20 @@
 <script lang="ts" setup>
 import jp from 'jsonpath';
 import type { INodeUi } from '@/Interface';
-import type { IDataObject } from 'n8n-workflow';
-import { clearJsonKey, convertPath } from '@/utils/typesUtils';
-import { executionDataToJson } from '@/utils/nodeTypesUtils';
-import { useWorkflowsStore } from '@/stores/workflows.store';
+import { NodeConnectionTypes, type IDataObject, type IRunExecutionData } from 'n8n-workflow';
+import { clearJsonKey, convertPath } from '@/app/utils/typesUtils';
+import { executionDataToJson } from '@/app/utils/nodeTypesUtils';
+import { useWorkflowsStore } from '@/app/stores/workflows.store';
 import { useNDVStore } from '@/features/ndv/shared/ndv.store';
-import { useNodeHelpers } from '@/composables/useNodeHelpers';
-import { useToast } from '@/composables/useToast';
+import { useNodeHelpers } from '@/app/composables/useNodeHelpers';
+import { useToast } from '@/app/composables/useToast';
 import { useI18n } from '@n8n/i18n';
-import { nonExistingJsonPath, PopOutWindowKey } from '@/constants';
-import { useClipboard } from '@/composables/useClipboard';
-import { usePinnedData } from '@/composables/usePinnedData';
+import { nonExistingJsonPath, PopOutWindowKey } from '@/app/constants';
+import { useClipboard } from '@/app/composables/useClipboard';
+import { usePinnedData } from '@/app/composables/usePinnedData';
 import { inject, computed, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import { useTelemetry } from '@/composables/useTelemetry';
+import { useTelemetry } from '@/app/composables/useTelemetry';
 import { ElDropdown, ElDropdownItem, ElDropdownMenu } from 'element-plus';
 import { N8nIconButton } from '@n8n/design-system';
 type JsonPathData = {
@@ -32,6 +32,7 @@ const props = withDefaults(
 		jsonData: IDataObject[];
 		outputIndex: number | undefined;
 		runIndex: number | undefined;
+		execution?: IRunExecutionData;
 	}>(),
 	{
 		selectedJsonPath: nonExistingJsonPath,
@@ -76,7 +77,14 @@ function getJsonValue(): string {
 			selectedValue = clearJsonKey(pinnedData.data.value as object);
 		} else {
 			selectedValue = executionDataToJson(
-				nodeHelpers.getNodeInputData(props.node, props.runIndex, props.outputIndex),
+				nodeHelpers.getNodeInputData(
+					props.node,
+					props.runIndex,
+					props.outputIndex,
+					'output',
+					NodeConnectionTypes.Main,
+					props.execution,
+				),
 			);
 		}
 	} else {

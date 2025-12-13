@@ -1,14 +1,14 @@
 <script setup lang="ts">
+import { useChatStore } from '@/features/ai/chatHub/chat.store';
+import { unflattenModel } from '@/features/ai/chatHub/chat.utils';
 import ChatAgentAvatar from '@/features/ai/chatHub/components/ChatAgentAvatar.vue';
 import ChatSidebarLink from '@/features/ai/chatHub/components/ChatSidebarLink.vue';
 import { CHAT_CONVERSATION_VIEW } from '@/features/ai/chatHub/constants';
-import { type ChatHubSessionDto } from '@n8n/api-types';
+import { type ChatModelDto, type ChatHubSessionDto } from '@n8n/api-types';
 import { N8nInput } from '@n8n/design-system';
 import type { ActionDropdownItem } from '@n8n/design-system/types';
+import { useI18n } from '@n8n/i18n';
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue';
-import { useChatStore } from '../chat.store';
-import { useWorkflowsStore } from '@/stores/workflows.store';
-import { restoreConversationModelFromMessageOrSession } from '@/features/ai/chatHub/chat.utils';
 
 const { session, isRenaming, active } = defineProps<{
 	session: ChatHubSessionDto;
@@ -23,30 +23,32 @@ const emit = defineEmits<{
 	delete: [sessionId: string];
 }>();
 
-const chatStore = useChatStore();
-const workflowsStore = useWorkflowsStore();
 const input = useTemplateRef('input');
 const editedLabel = ref('');
+const chatStore = useChatStore();
+const i18n = useI18n();
 
 type SessionAction = 'rename' | 'delete';
 
-const model = computed(() =>
-	restoreConversationModelFromMessageOrSession(
-		session,
-		chatStore.agents,
-		workflowsStore.workflowsById,
-	),
-);
+const agent = computed<ChatModelDto | null>(() => {
+	const model = unflattenModel(session);
+
+	if (!model) {
+		return null;
+	}
+
+	return chatStore.getAgent(model, session.agentName);
+});
 
 const dropdownItems = computed<Array<ActionDropdownItem<SessionAction>>>(() => [
 	{
 		id: 'rename',
-		label: 'Rename',
+		label: i18n.baseText('chatHub.session.actions.rename'),
 		icon: 'pencil',
 	},
 	{
 		id: 'delete',
-		label: 'Delete',
+		label: i18n.baseText('chatHub.session.actions.delete'),
 		icon: 'trash-2',
 	},
 ]);
@@ -76,7 +78,7 @@ function handleKeyDown(e: KeyboardEvent) {
 		return;
 	}
 
-	if (e.key === 'Enter') {
+	if (e.key === 'Enter' && !e.isComposing) {
 		handleBlur();
 	}
 }
@@ -115,7 +117,7 @@ watch(
 			/>
 		</template>
 		<template #icon>
-			<ChatAgentAvatar v-if="model" :model="model" size="sm" />
+			<ChatAgentAvatar :agent="agent" size="sm" />
 		</template>
 	</ChatSidebarLink>
 </template>
