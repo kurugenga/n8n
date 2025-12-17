@@ -1,0 +1,73 @@
+{
+  "name": "Süper Lig Günlük Maç Bildirimi (Ücretsiz - TheSportsDB)",
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "everyDay",
+              "hour": 9,
+              "minute": 0
+            }
+          ]
+        },
+        "timezone": "Europe/Istanbul"
+      },
+      "name": "Cron",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{'https://www.thesportsdb.com/api/v1/json/123/eventsday.php?d=' + $now.setZone('Europe/Istanbul').toFormat('yyyy-LL-dd') + '&s=Soccer'}}",
+        "responseFormat": "json"
+      },
+      "name": "EventsDay (Soccer)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const SUPER_LIG_ID = '4339';\n\nconst todayStr = $now.setZone('Europe/Istanbul').toFormat('dd.LL.yyyy');\nconst events = ($json.events || []).filter(e => String(e.idLeague) === SUPER_LIG_ID);\n\n// TheSportsDB bazen \"events\": null döndürebiliyor\nif (!events || events.length === 0) {\n  return [{ text: `Süper Lig (${todayStr})\\n\\nBugün maç bulunamadı.` }];\n}\n\n// Saat formatı: strTime çoğu zaman HH:MM:SS gelir. Bazı kayıtlarda boş olabilir.\nconst normTime = (t) => {\n  if (!t) return 'Saat yok';\n  // HH:MM:SS -> HH:MM\n  return String(t).slice(0, 5);\n};\n\n// Basit sıralama: strTime üzerinden\nconst sorted = events.slice().sort((a, b) => {\n  const ta = normTime(a.strTime);\n  const tb = normTime(b.strTime);\n  return ta.localeCompare(tb);\n});\n\nconst lines = sorted.map(e => {\n  const home = e.strHomeTeam || 'Ev Sahibi';\n  const away = e.strAwayTeam || 'Deplasman';\n  const time = normTime(e.strTime);\n\n  // Skor varsa ekle\n  const hs = e.intHomeScore;\n  const as = e.intAwayScore;\n  const score = (hs !== null && hs !== undefined && as !== null && as !== undefined)\n    ? ` (${hs}-${as})`\n    : '';\n\n  return `${time}  ${home} - ${away}${score}`;\n});\n\nconst msg = `Süper Lig | Bugünün Maçları (${todayStr})\\n\\n${lines.join('\\n')}`;\nreturn [{ text: msg }];"
+      },
+      "name": "Süper Lig Filtrele + Mesaj",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "chatId": "-1001356946621",
+        "text": "={{$json.text}}"
+      },
+      "name": "Telegrama Gönder",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [900, 300],
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Cron": {
+      "main": [[{ "node": "EventsDay (Soccer)", "type": "main", "index": 0 }]]
+    },
+    "EventsDay (Soccer)": {
+      "main": [[{ "node": "Süper Lig Filtrele + Mesaj", "type": "main", "index": 0 }]]
+    },
+    "Süper Lig Filtrele + Mesaj": {
+      "main": [[{ "node": "Telegrama Gönder", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false
+}
